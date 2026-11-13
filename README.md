@@ -413,10 +413,11 @@ const openai = new OpenAI({
 
 It also reads `OPENAI_BASE_URL` and `OPENAI_API_KEY`. What you handle yourself in that case:
 queue comments are dropped; errors arrive as generic status errors, so read `resets_at`,
-`context_cap` and `bound_by` from the body; it retries 429 responses, including quota errors
-that will not pass before `resets_at`; there is no `/auth/me` method; in-stream error events and
-the cap notice are yours to detect; and `reasoning_content` is present in responses but not in
-its TypeScript types. Do not stack this SDK and the OpenAI SDK's retries on the same call.
+`context_cap` and `bound_by` from the body; it retries the rate-limit 429 but not quota errors,
+which MolochAI marks `X-Should-Retry: false`; there is no `/auth/me` method; in-stream error
+events and the cap notice are yours to detect; and `reasoning_content` is present in responses
+but not in its TypeScript types. Do not stack this SDK and the OpenAI SDK's retries on the same
+call.
 
 ## Troubleshooting
 
