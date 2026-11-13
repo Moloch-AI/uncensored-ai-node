@@ -1,0 +1,23 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    ignore:
+      # vitest 5 requires Node >= 22.12; CI still tests Node 20.
+      - dependency-name: vitest
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@vitest/coverage-v8"
+        update-types: ["version-update:semver-major"]
+      # vite 8's optional peer chain (@vitejs/devtools-vitest -> vitest@*) crashes npm 10's
+      # dependency resolver. vite is pinned to 7.x through package.json overrides.
+      - dependency-name: vite
+        update-types: ["version-update:semver-major"]
+      # @types/node tracks the oldest supported Node (20).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly

@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Node ${{ matrix.node }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [20, 22, 24]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      # npm ci also runs the `prepare` script, which builds dist/.
+      - run: npm ci
+      - name: Lint and format check (biome)
+        run: npm run lint
+      - name: Typecheck (tsc)
+        run: npm run typecheck
+      - name: Unit tests with coverage (vitest)
+        run: npm run test:coverage
+      - name: Build
+        run: npm run build
+      - name: Pack (dry run, never published)
+        run: npm pack --dry-run
+
+  integration:
+    name: Integration (mock server)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check out the mock server
+        uses: actions/checkout@v7
+        with:
+          repository: Moloch-AI/uncensored-ai-api
+          ref: v0.1.0
+          path: .mock/uncensored-ai-api
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Start the mock server
+        run: |
+          node .mock/uncensored-ai-api/mock-server/server.mjs --port 4012 --quiet &
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4012/health && exit 0
+            sleep 1
+          done
+          echo "mock server did not start" >&2
+          exit 1
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          MOLOCHAI_MOCK_BASE_URL: http://127.0.0.1:4012/api/v1
+      - name: Examples against the mock
+        env:
+          MOLOCHAI_BASE_URL: http://127.0.0.1:4012/api/v1
+          MOLOCHAI_API_KEY: mock-key
+        run: |
+          node examples/chat.mjs
+          node examples/stream.mjs
+          node examples/tools.ts
+          node examples/account.mjs
+          node examples/errors.mjs "Hi"

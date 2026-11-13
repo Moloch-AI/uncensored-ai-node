@@ -1,0 +1,65 @@
+{
+  "name": "molochai",
+  "version": "0.1.0",
+  "description": "TypeScript/Node SDK for the MolochAI API: typed errors, retries, SSE streaming with queue progress, and account limits.",
+  "license": "MIT",
+  "author": "MolochAI",
+  "homepage": "https://github.com/Moloch-AI/uncensored-ai-node#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Moloch-AI/uncensored-ai-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Moloch-AI/uncensored-ai-node/issues"
+  },
+  "keywords": [
+    "molochai",
+    "llm",
+    "openai-compatible",
+    "uncensored",
+    "sdk",
+    "sse",
+    "typescript"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build": "npm run clean && tsc -p tsconfig.build.json",
+    "prepare": "npm run build",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write .",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:integration": "vitest run test/integration",
+    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.6.7",
+    "@types/node": "20.19.43",
+    "@vitest/coverage-v8": "4.1.12",
+    "typescript": "7.0.2",
+    "vite": "7.3.8",
+    "vitest": "4.1.12"
+  },
+  "overrides": {
+    "vite": "7.3.8"
+  }
+}
