@@ -1,10 +1,10 @@
 {
   "name": "molochai",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "TypeScript/Node SDK for the MolochAI API: typed errors, retries, SSE streaming with queue progress, and account limits.",
   "license": "MIT",
   "author": "MolochAI",
-  "homepage": "https://github.com/Moloch-AI/uncensored-ai-node#readme",
+  "homepage": "https://molochai.dev/docs?utm_source=github&utm_medium=oss&utm_campaign=uncensored-ai-node",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Moloch-AI/uncensored-ai-node.git"
@@ -15,11 +15,17 @@
   "keywords": [
     "molochai",
     "llm",
+    "ai",
     "openai-compatible",
+    "chat-completions",
     "uncensored",
+    "less-restricted",
     "sdk",
+    "api-client",
+    "streaming",
     "sse",
-    "typescript"
+    "typescript",
+    "esm"
   ],
   "type": "module",
   "sideEffects": false,
@@ -45,16 +51,20 @@
     "prepare": "npm run build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "biome check .",
+    "lint:package": "publint run --strict && attw --pack . --ignore-rules cjs-resolves-to-esm",
     "format": "biome check --write .",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:integration": "vitest run test/integration",
-    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build"
+    "test:live": "vitest run --config vitest.live.config.ts",
+    "check": "npm run lint && npm run typecheck && npm run test:coverage && npm run build && npm run lint:package"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@biomejs/biome": "2.6.7",
     "@types/node": "20.19.43",
     "@vitest/coverage-v8": "4.1.12",
+    "publint": "0.3.25",
     "typescript": "7.0.2",
     "vite": "7.3.8",
     "vitest": "4.1.12"

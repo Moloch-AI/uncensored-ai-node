@@ -1,0 +1,46 @@
+name: Live API
+
+# Calls the real MolochAI API (https://api.molochai.dev/api/v1).
+# - Unauthenticated tier, always: an invalid key must get the SDK's AuthenticationError (401)
+#   from chat completions, /models and /api/auth/me. Costs nothing.
+# - Authenticated tier, only when the MOLOCHAI_API_KEY repository secret exists: lists models,
+#   reads the account, and sends one tiny completion and one tiny stream. Without the secret
+#   it is skipped and the run stays green.
+# See CONTRIBUTING.md ("Live tests against the real API").
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "23 6 * * 1" # Mondays, 06:23 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-api
+  cancel-in-progress: false
+
+jobs:
+  live:
+    name: Live API tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      HAS_API_KEY: ${{ secrets.MOLOCHAI_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Say that the authenticated tier will be skipped
+        if: env.HAS_API_KEY != 'true'
+        run: echo "::notice title=Authenticated live tests skipped::The MOLOCHAI_API_KEY repository secret is not set, so only the unauthenticated tier runs."
+      - name: Live tests
+        env:
+          MOLOCHAI_LIVE: "1"
+          MOLOCHAI_API_KEY: ${{ secrets.MOLOCHAI_API_KEY }}
+        run: npm run test:live -- --reporter=verbose

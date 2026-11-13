@@ -43,8 +43,8 @@ Where it fits in the Moloch-AI repositories:
 ### Why a dedicated SDK
 
 The official OpenAI SDKs work with MolochAI (see
-[Using the OpenAI SDK instead](#using-the-openai-sdk-instead)). This SDK exists for the parts
-they leave to you:
+[Using the OpenAI SDK instead](https://github.com/Moloch-AI/uncensored-ai-node#using-the-openai-sdk-instead)).
+This SDK exists for the parts they leave to you:
 
 - SSE comment lines such as `: queued · position 2 of 3 · waiting 4s` are dropped by the OpenAI
   SDKs. Here they reach an `onQueue` callback.
@@ -86,11 +86,15 @@ they leave to you:
 
 ## Installation
 
-The package is not published to the npm registry yet. Install it from GitHub:
+The package is not on the npm registry yet. Install it from GitHub, pinned to a release tag:
 
 ```bash
-npm install github:Moloch-AI/uncensored-ai-node#v0.1.0
+npm install github:Moloch-AI/uncensored-ai-node#v0.1.1
 ```
+
+Do not run `npm install molochai` for now: we have not published that name, so it would
+install whatever someone else may have put there, into a project that holds your API key.
+This README will say so when the package is on npm.
 
 npm clones the repository, installs its build tools and runs the `prepare` script, which
 compiles `dist/`. This takes longer than a registry install. Nothing is added to your runtime
@@ -252,7 +256,7 @@ is MolochAI-only and throws a `NotFoundError` that says so when the server has n
 | `maxRetryAfter` | | `60000` (ms) | Longest `Retry-After` to wait on a rate limit. Longer: `RateLimitError` at once. |
 | `fetch` | | global `fetch` | Any `(url, init) => Promise<Response>`. |
 | `defaultHeaders` | | `{}` | Sent with every request. `Authorization` always comes from `apiKey`. |
-| `dangerouslyAllowBrowser` | | `false` | See [Security considerations](#security-considerations). |
+| `dangerouslyAllowBrowser` | | `false` | See [Security considerations](https://github.com/Moloch-AI/uncensored-ai-node#security-considerations). |
 
 Options override environment variables. Invalid values (`MOLOCHAI_TIMEOUT=abc`, a non-http
 `baseURL`) throw when the client is created.
@@ -432,7 +436,7 @@ its TypeScript types. Do not stack this SDK and the OpenAI SDK's retries on the 
 | Reply ends with `[Response is too large...]` | The plan's output cap; `finish_reason` is `"length"`. `max_tokens` cannot raise it. |
 | `TypeError` reading `chunk.choices[0]` | The last chunk has `choices: []` (it carries usage). |
 | `account.retrieve()` throws `NotFoundError` | `baseURL` points at a server that is not MolochAI. |
-| `ERR_REQUIRE_ESM` | The package is ESM. Use `import`, or `await import("molochai")` from CommonJS on Node versions without `require()` support for ES modules. |
+| `ERR_REQUIRE_ESM` | The package is ESM only. Use `import`. From CommonJS, `require("molochai")` works on Node 20.19+ and 22.12+; on older versions use `await import("molochai")`. In CommonJS TypeScript files, `require` of the package type-checks with `"module": "nodenext"` (TypeScript 5.8+), not with `"node16"`. |
 | Type errors about `Response` or `AbortSignal` | Install `@types/node` or include the `DOM` lib in `tsconfig.json`. |
 
 More help: [docs](https://molochai.dev/docs?utm_source=github&utm_medium=oss&utm_campaign=uncensored-ai-node)
@@ -457,8 +461,9 @@ and [support](https://molochai.dev/contact?utm_source=github&utm_medium=oss&utm_
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands and the mock-server integration tests.
-Changes are listed in [CHANGELOG.md](CHANGELOG.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, commands, the mock-server integration tests
+and the opt-in live tests. Changes are listed in [CHANGELOG.md](CHANGELOG.md); the release
+process is in [RELEASING.md](RELEASING.md).
 
 ## License
 

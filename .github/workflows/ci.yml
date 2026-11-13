@@ -36,7 +36,9 @@ jobs:
         run: npm run test:coverage
       - name: Build
         run: npm run build
-      - name: Pack (dry run, never published)
+      - name: Package checks (publint, attw)
+        run: npm run lint:package
+      - name: Pack (dry run)
         run: npm pack --dry-run
 
   integration:
@@ -58,7 +60,7 @@ jobs:
       - name: Start the mock server
         run: |
           node .mock/uncensored-ai-api/mock-server/server.mjs --port 4012 --quiet &
-          for i in $(seq 1 30); do
+          for _ in $(seq 1 30); do
             curl -sf http://127.0.0.1:4012/health && exit 0
             sleep 1
           done

@@ -1,0 +1,192 @@
+name: Release
+
+# Publishing a GitHub release (tag vX.Y.Z) runs the checks, packs the package once,
+# attaches that tarball to the release and, only when the repository variable
+# PUBLISH_TO_NPM is 'true', publishes the same tarball to npm through trusted
+# publishing (OIDC, no token) with provenance. Started by hand (workflow_dispatch)
+# it only builds and checks. See RELEASING.md.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Check, build and pack
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    outputs:
+      name: ${{ steps.version.outputs.name }}
+      version: ${{ steps.version.outputs.version }}
+      tarball: ${{ steps.pack.outputs.tarball }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          # No dependency cache in a release build.
+          package-manager-cache: false
+      - name: Check that the tag matches package.json
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          name="$(node -p 'require("./package.json").name')"
+          version="$(node -p 'require("./package.json").version')"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = "release" ]; then
+            tag="$RELEASE_TAG"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            tag="$REF_NAME"
+          else
+            echo "::notice::Started on branch $REF_NAME, not on a tag: no tag to compare."
+            exit 0
+          fi
+          if [ "$tag" != "v$version" ]; then
+            echo "::error::Tag $tag does not match package.json version $version (expected v$version)."
+            exit 1
+          fi
+          echo "Tag $tag matches $name $version."
+      # npm ci also runs the `prepare` script, which builds dist/.
+      - run: npm ci
+      - name: Lint and format check (biome)
+        run: npm run lint
+      - name: Typecheck (tsc)
+        run: npm run typecheck
+      - name: Unit tests with coverage (vitest)
+        run: npm run test:coverage
+      - name: Check out the mock server
+        uses: actions/checkout@v7
+        with:
+          repository: Moloch-AI/uncensored-ai-api
+          ref: v0.1.0
+          path: .mock/uncensored-ai-api
+          persist-credentials: false
+      - name: Integration tests (mock server)
+        env:
+          MOLOCHAI_MOCK_BASE_URL: http://127.0.0.1:4012/api/v1
+        run: |
+          node .mock/uncensored-ai-api/mock-server/server.mjs --port 4012 --quiet &
+          for _ in $(seq 1 30); do
+            curl -sf http://127.0.0.1:4012/health > /dev/null && break
+            sleep 1
+          done
+          npm run test:integration
+      - name: Build
+        run: npm run build
+      - name: Pack
+        id: pack
+        run: |
+          mkdir -p pkg
+          npm pack --pack-destination pkg
+          shopt -s nullglob
+          files=(pkg/*.tgz)
+          if [ "${#files[@]}" -ne 1 ]; then
+            echo "::error::Expected one tarball in pkg/, found ${#files[@]}."
+            exit 1
+          fi
+          tarball="$(basename "${files[0]}")"
+          echo "tarball=$tarball" >> "$GITHUB_OUTPUT"
+          tar -tzf "pkg/$tarball"
+          sha256sum "pkg/$tarball"
+      - name: Lint the tarball (publint)
+        env:
+          TARBALL: pkg/${{ steps.pack.outputs.tarball }}
+        run: npx --no -- publint run --strict "$TARBALL"
+      # The package is ESM only: a require() from CommonJS needs Node 20.19+ or 22.12+,
+      # which attw (pinned to TypeScript 5.6) reports as cjs-resolves-to-esm.
+      - name: Check the types in the tarball (attw)
+        env:
+          TARBALL: pkg/${{ steps.pack.outputs.tarball }}
+        run: npx --no -- attw "$TARBALL" --ignore-rules cjs-resolves-to-esm
+      - uses: actions/upload-artifact@v7
+        with:
+          name: npm-package
+          path: pkg/${{ steps.pack.outputs.tarball }}
+          if-no-files-found: error
+          retention-days: 30
+
+  attach:
+    name: Attach the tarball to the release
+    needs: build
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: pkg
+      - name: Upload to the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          TARBALL: pkg/${{ needs.build.outputs.tarball }}
+        run: gh release upload "$TAG" "$TARBALL" --clobber --repo "$GITHUB_REPOSITORY"
+
+  publish:
+    name: Publish to npm
+    needs: [build, attach]
+    if: github.event_name == 'release' && vars.PUBLISH_TO_NPM == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: npm
+      url: https://www.npmjs.com/package/${{ needs.build.outputs.name }}/v/${{ needs.build.outputs.version }}
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Make sure of Node >= 22.14.0 and npm >= 11.5.1 (needed for trusted publishing)
+        run: |
+          at_least() {
+            node -e '
+              const parse = (s) => s.replace(/^v/, "").split(".").map(Number);
+              const [have, want] = [parse(process.argv[1]), parse(process.argv[2])];
+              for (let i = 0; i < 3; i++) {
+                if (have[i] !== want[i]) process.exit(have[i] > want[i] ? 0 : 1);
+              }
+            ' "$1" "$2"
+          }
+          if ! at_least "$(node --version)" 22.14.0; then
+            echo "::error::Node $(node --version) is older than 22.14.0."
+            exit 1
+          fi
+          if ! at_least "$(npm --version)" 11.5.1; then
+            npm install --global npm@11.21.2
+          fi
+          echo "Node $(node --version), npm $(npm --version)"
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+          path: pkg
+      - name: Publish the checked tarball
+        env:
+          TARBALL: pkg/${{ needs.build.outputs.tarball }}
+          PRERELEASE: ${{ github.event.release.prerelease }}
+        run: |
+          # A GitHub pre-release goes to the `next` dist-tag, never to `latest`.
+          dist_tag=latest
+          if [ "$PRERELEASE" = "true" ]; then dist_tag=next; fi
+          npm publish "$TARBALL" --provenance --access public --tag "$dist_tag"

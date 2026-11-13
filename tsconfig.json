@@ -18,5 +18,5 @@
       "molochai": ["./src/index.ts"]
     }
   },
-  "include": ["src", "test", "examples", "vitest.config.ts"]
+  "include": ["src", "test", "examples", "vitest.config.ts", "vitest.live.config.ts"]
 }
