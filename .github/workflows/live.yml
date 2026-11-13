@@ -3,13 +3,19 @@ name: Live API
 # Calls the real MolochAI API (https://api.molochai.dev/api/v1).
 # - Unauthenticated tier, always: an invalid key must get the SDK's AuthenticationError (401)
 #   from chat completions, /models and /api/auth/me. Costs nothing.
-# - Authenticated tier, only when the MOLOCHAI_API_KEY repository secret exists: lists models,
-#   reads the account, and sends one tiny completion and one tiny stream. Without the secret
-#   it is skipped and the run stays green.
-# See CONTRIBUTING.md ("Live tests against the real API").
+# - Authenticated tier, only when the MOLOCHAI_API_KEY repository secret exists: models,
+#   account, one tiny completion, one tiny stream, one tool call and its follow-up, and two
+#   errors that cost nothing. Without the secret it is skipped and the run stays green.
+# See CONTRIBUTING.md ("Live tests against the real API") for the request count of one run.
 
 on:
   workflow_dispatch:
+    inputs:
+      model:
+        description: "Model id for every generation request (empty: picked from GET /models)"
+        required: false
+        default: ""
+        type: string
   schedule:
     - cron: "23 6 * * 1" # Mondays, 06:23 UTC
 
@@ -43,4 +49,6 @@ jobs:
         env:
           MOLOCHAI_LIVE: "1"
           MOLOCHAI_API_KEY: ${{ secrets.MOLOCHAI_API_KEY }}
+          # Empty on scheduled runs. Read by the tests from the environment, never run as code.
+          MOLOCHAI_LIVE_MODEL: ${{ inputs.model }}
         run: npm run test:live -- --reporter=verbose

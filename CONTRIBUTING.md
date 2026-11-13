@@ -63,23 +63,71 @@ changing `src/`.
 `test/live/` calls the real API at `https://api.molochai.dev/api/v1`. It is excluded from
 `npm test`, and its suites skip unless `MOLOCHAI_LIVE=1`.
 
-- **Unauthenticated tier** (needs nothing, costs nothing): an invalid key against chat
-  completions, `/models` and `/api/auth/me` must throw `AuthenticationError` with status 401.
-  Each test logs the status, body and rate-limit headers it got.
-- **Authenticated tier** (also needs `MOLOCHAI_API_KEY`, for an account with a plan or credit):
-  lists models, reads the account, and sends one tiny completion and one tiny stream ("Reply
-  with the single word: pong") to the first available model. It checks the shape of the
-  responses, not the text. A reasoning model also spends some reasoning tokens on the two
-  replies.
-
 ```bash
 MOLOCHAI_LIVE=1 npm run test:live                                 # unauthenticated tier only
 MOLOCHAI_LIVE=1 MOLOCHAI_API_KEY=your-api-key npm run test:live   # both tiers
 ```
 
-`MOLOCHAI_BASE_URL` points the suite at another server. Against the mock server the
-authenticated tier passes with `mock-key`; the unauthenticated tier fails there by design,
-because the mock accepts any non-empty key.
+**Unauthenticated tier** (needs nothing, costs nothing): an invalid key against chat
+completions, `/models` and `/api/auth/me` must throw `AuthenticationError` with status 401. Each
+test logs the status, body and rate-limit headers it got.
+
+**Authenticated tier** (also needs `MOLOCHAI_API_KEY`, for an account with a plan or credit),
+in this order:
+
+1. `models.list()`: every entry has an id, a display name and `available`, and at least one
+   model is available (none available is an outage and fails the run).
+2. `account.retrieve()`: `tier`, `plan`, `credit_usd`, `email_verified`, and a `context_limit`
+   for every available model. The email and the credit amount are never logged or compared.
+3. One completion ("Reply with the single word: pong") on
+   `llama-3.3-70b-instruct-abliterated`, which does not reason, or on the first available model
+   when that one is not served: the shape, the `model` echo, `finish_reason`, and usage with
+   total = prompt + completion.
+4. `rateLimit` (`X-RateLimit-Limit` and `X-RateLimit-Remaining`) of that same response, so no
+   extra request.
+5. One stream on a reasoning model (`glm-4.7-flash-uncensored` or `gemma4-26b-a4b-qat` when
+   available, else any other; skipped when none is served): content or reasoning deltas, the
+   usage chunk with empty `choices`, and `[DONE]`. A recording `fetch` keeps the raw bytes, and
+   `textDeltas()` and `finalCompletion()` (content, reasoning, finish reason, usage) must match
+   them.
+6. One tool call (`get_time`, forced with `tool_choice`) on the same model as step 3: it must end
+   in `finish_reason: "tool_calls"` with JSON arguments, and the follow-up with the
+   `role: "tool"` result must get a normal reply.
+7. An unknown model id must throw `UnprocessableEntityError` (422). When `/models` lists a model
+   as unavailable, a request to it must throw `ModelUnavailableError` (503 `model_unavailable`);
+   otherwise that test is skipped.
+
+Tests check the shape of the responses, never the text. An account problem (402 no plan and no
+credit, 401, 403, a used-up quota) fails the first test that meets it with one sentence, such as
+"Top up the test account ..." for 402, and the tests after it are skipped.
+
+What one run sends:
+
+| Tier | Requests | Of which generate a reply |
+|---|---|---|
+| Unauthenticated | 3 | none: all are refused with 401 |
+| Authenticated | 8, or 7 when every model is available | 4: the completion, the stream, the tool call and its follow-up |
+
+The four generating requests are tiny: a one-line prompt and a reply of a word or a short
+sentence. Only the stream goes to a reasoning model, which may also spend a few hundred reasoning
+tokens. The other requests (models, account, the 422 and the 503) generate nothing. When the
+non-reasoning model is not being served, steps 3 and 6 also go to a reasoning model, and a
+transient server error can add a retry (the suite allows one per request).
+
+Two optional variables:
+
+- `MOLOCHAI_LIVE_MODEL=<id>` sends every generating request to that model. The workflow's
+  "Run workflow" button has the same option as its `model` input.
+- `MOLOCHAI_LIVE_BASE_URL` points the suite at another deployment, for example the mock server
+  while you work on these tests. `MOLOCHAI_BASE_URL` is ignored on purpose, so a shell set up
+  for the mock cannot turn the live tests into mock tests. The mock accepts any non-empty key,
+  so run only the authenticated file there:
+
+  ```bash
+  node mock-server/server.mjs --port 4012 --quiet --unavailable qwen3.8-27b-uncensored
+  MOLOCHAI_LIVE=1 MOLOCHAI_API_KEY=mock-key MOLOCHAI_LIVE_BASE_URL=http://127.0.0.1:4012/api/v1 \
+    npm run test:live -- test/live/authenticated.test.ts
+  ```
 
 The [Live API workflow](.github/workflows/live.yml) runs every Monday and on demand. It always
 runs the unauthenticated tier, and runs the authenticated tier only when the repository secret

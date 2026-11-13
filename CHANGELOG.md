@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+Tests and contributor docs only; the SDK's code is unchanged.
+
+### Changed
+
+- The authenticated live tests (`test/live/`) now also check a stream on a reasoning model
+  against its raw bytes (`textDeltas()`, `finalCompletion()`, reasoning, the usage chunk and
+  `[DONE]`), a tool call and its follow-up, the rate-limit headers, and two errors that cost
+  nothing (an unknown model id, a model that is not being served). The completion goes to the
+  non-reasoning model when it is served. An account with no plan or credit fails one test with a
+  "top up the test account" message and the rest are skipped. The account test no longer
+  compares the email. `MOLOCHAI_LIVE_MODEL` (also a `model` input of the Live API workflow)
+  picks the model, and `MOLOCHAI_LIVE_BASE_URL` replaces `MOLOCHAI_BASE_URL` for pointing the
+  suite at the mock server. CONTRIBUTING.md lists the requests of one run.
+
 ## [0.1.1] - 2026-11-13
 
 Prepares the package for the npm registry; it is not published there yet, and the install
